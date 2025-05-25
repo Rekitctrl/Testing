@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Unlimited Chat</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Segoe UI', sans-serif; background: #f8f8f8; color: #333;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+    header {
+      padding: 1rem; background: #4ECDC4; color: white;
+      font-size: 1.25rem; font-weight: bold;
+    }
+    .messages {
+      flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column;
+      gap: 0.5rem;
+    }
+    .message, .system-message {
+      background: white; border-radius: 12px; padding: 0.75rem 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 70%;
+    }
+    .message--mine { align-self: flex-end; background: #d0f0e4; }
+    .system-message {
+      background: #eee; color: #666; font-style: italic; align-self: center;
+      max-width: 100%;
+    }
+    .message__name { font-weight: bold; margin-bottom: 0.25rem; }
+    form {
+      display: flex; padding: 1rem; gap: 0.5rem; background: white;
+    }
+    form input {
+      flex: 1; padding: 0.75rem; border: 1px solid #ccc; border-radius: 8px;
+    }
+    form button {
+      padding: 0.75rem 1.25rem; background: #4ECDC4; color: white; border: none;
+      border-radius: 8px; font-weight: bold; cursor: pointer;
+    }
+    .media-preview {
+      margin-top: 0.5rem; border-radius: 8px;
+      max-width: 100%; max-height: 300px;
+    }
+  </style>
+</head>
+<body>
+
+<header>Unlimited Chat</header>
+<div class="status" style="padding: 0.5rem 1rem; font-size: 0.9em;"></div>
+<div class="messages"></div>
+<form>
+  <input type="text" placeholder="Type a message..." autocomplete="off">
+  <button type="submit">Send</button>
+</form>
+
+<template data-template="message">
+  <div class="message">
+    <div class="message__name"></div>
+    <div class="message__bubble"></div>
+  </div>
+</template>
+
+<script>
+const possibleEmojis = ['🐀','🐁','🐭','🐹','🐂','🐃','🐄','🐮','🐅','🐆','🐯','🐇','🐐','🐑','🐏','🐴','🐎','🐱','🐈','🐰','🐓','🐔','🐤','🐣','🐥','🐦','🐧','🐘','🐩','🐕','🐷','🐖','🐗','🐫','🐪','🐶','🐺','🐻','🐨','🐼','🐵','🙈','🙉','🙊','🐒','🐉','🐲','🐊','🐍','🐢','🐸','🐋','🐳','🐬','🐙','🐟','🐠','🐡','🐚','🐌','🐛','🐜','🐝','🐞'];
+const emoji = possibleEmojis[Math.floor(Math.random() * possibleEmojis.length)];
+let name = prompt("What's your name?") || "Anonymous";
+while (!name.trim()) name = prompt("Please enter a valid name:") || "Anonymous";
+name = name.trim();
+
+// Passcode and locking logic
+let joinCode = prompt("Enter room name (blank for global):") || 'global-chat-room';
+let passcode = '';
+let roomLock = false;
+const roomId = 'observable-' + joinCode;
+
+if (confirm("Do you want to lock this room (only first user can lock)?")) roomLock = true;
+if (confirm("Protect room with passcode?")) {
+  passcode = prompt("Set room passcode:") || '';
+}
+
+// Chat connection
+const drone = new ScaleDrone('yiS12Ts5RdNhebyM');
+let room, isConnected = false;
+let connectedUsers = new Map();
+
+function showStatus(msg) {
+  document.querySelector('.status').textContent = msg;
+  document.title = `Chat (${msg})`;
+}
+
+function insertSystemMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'system-message';
+  el.textContent = text;
+  document.querySelector('.messages').appendChild(el);
+  scrollToBottom();
+}
+
+function insertMessageToDOM({name: userName, content, emoji, timestamp}, isFromMe, senderId) {
+  const tpl = document.querySelector('template[data-template="message"]');
+  const clone = tpl.content.cloneNode(true);
+  const msgEl = clone.querySelector('.message');
+  if (isFromMe) msgEl.classList.add('message--mine');
+
+  const nameEl = clone.querySelector('.message__name');
+  nameEl.textContent = `${emoji} ${userName}`;
+
+  const bubbleEl = clone.querySelector('.message__bubble');
+  bubbleEl.textContent = content;
+
+  // Add media preview
+  if (content.match(/\.(jpeg|jpg|png|gif|webp)$/i)) {
+    const img = document.createElement('img');
+    img.src = content;
+    img.className = 'media-preview';
+    bubbleEl.appendChild(img);
+  } else if (content.match(/\.(mp4|webm|ogg)$/i)) {
+    const video = document.createElement('video');
+    video.src = content;
+    video.controls = true;
+    video.className = 'media-preview';
+    bubbleEl.appendChild(video);
+  } else if (content.match(/\.(mp3|wav|ogg)$/i)) {
+    const audio = document.createElement('audio');
+    audio.src = content;
+    audio.controls = true;
+    audio.className = 'media-preview';
+    bubbleEl.appendChild(audio);
+  }
+
+  if (timestamp) {
+    const time = document.createElement('div');
+    time.style = 'font-size:0.7em;opacity:0.5;margin-top:4px;';
+    time.textContent = new Date(timestamp).toLocaleTimeString();
+    bubbleEl.appendChild(time);
+  }
+
+  document.querySelector('.messages').appendChild(clone);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  const el = document.querySelector('.messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+function broadcastMessage(data) {
+  drone.publish({ room: roomId, message: data });
+}
+
+drone.on('open', error => {
+  if (error) return alert('Drone error: ' + error.message);
+  room = drone.subscribe(roomId);
+  room.on('open', error => {
+    if (error) return insertSystemMessage("Failed to join room.");
+    isConnected = true;
+    insertSystemMessage("Connected to chat.");
+    showStatus("Online");
+
+    // First user can lock room
+    if (room.members.length === 1 && roomLock) {
+      broadcastMessage({type: 'lock_room'});
+    }
+  });
+
+  room.on('members', members => {
+    connectedUsers = new Map(members.map(m => [m.id, m]));
+    if (members.length === 1) insertSystemMessage("You're the first one here.");
+  });
+
+  room.on('member_join', member => {
+    if (window.roomLocked && member.id !== drone.clientId) {
+      insertSystemMessage("New user tried to join but room is locked.");
+      return;
+    }
+    connectedUsers.set(member.id, member);
+    insertSystemMessage("A new user joined.");
+  });
+
+  room.on('data', (data, client) => {
+    if (client && client.id === drone.clientId) return;
+    if (data.type === 'chat_message') {
+      insertMessageToDOM(data.message, false, client.id);
+    } else if (data.type === 'lock_room') {
+      window.roomLocked = true;
+      insertSystemMessage("Room is now locked 🔒");
+    }
+  });
+
+  // Send join notification
+  broadcastMessage({
+    type: 'chat_message',
+    message: {
+      name, emoji, content: `joined the chat`, timestamp: Date.now()
+    }
+  });
+});
+
+document.querySelector('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const input = document.querySelector('input');
+  const val = input.value.trim();
+  if (!val) return;
+
+  const message = {
+    name, content: val, emoji, timestamp: Date.now()
+  };
+
+  insertMessageToDOM(message, true, drone.clientId);
+  broadcastMessage({ type: 'chat_message', message });
+  input.value = '';
+});
+
+</script>
+
+<!-- Scaledrone SDK -->
+<script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
+</body>
+</html>
