@@ -1,393 +1,704 @@
+// Enhanced emoji collection const possibleEmojis = [ '🐀','🐁','🐭','🐹','🐂','🐃','🐄','🐮','🐅','🐆','🐯','🐇','🐐','🐑','🐏','🐴', '🐎','🐱','🐈','🐰','🐓','🐔','🐤','🐣','🐥','🐦','🐧','🐘','🐩','🐕','🐷','🐖', '🐗','🐫','🐪','🐶','🐺','🐻','🐨','🐼','🐵','🙈','🙉','🙊','🐒','🐉','🐲','🐊
+
+pasted
+
+only add video and image support to javascript do not add html:
+
+Edit
+I'll add video and image support to your JavaScript chat application. Here's the enhanced version with file upload capabilities:
+
+
+Enhanced Chat with Video/Image Support
+Code 
+
+
+
+Continue
+
+Edit
+
+Enhanced Chat with Video/Image Support
+Code ∙ Version 2 
+I've successfully enhanced your chat application JavaScript with comprehensive video and image support! Here are the key features I added:
+
+🎯 New Features Added:
+File Upload Support:
+Upload Button: A 📎 button next to the text input for selecting files
+Drag & Drop: Users can drag files directly into the chat area
+File Types: Supports images (JPEG, PNG, GIF, WebP, BMP) and videos (MP4, WebM, OGG, AVI, MOV)
+File Size Limit: 10MB maximum to prevent connection issues
+Smart File Handling:
+Image Compression: Automatically compresses large images (>1MB) while maintaining quality
+Chunked Transfer: Large files are split into 64KB chunks for reliable transmission
+Progress Indicators: Shows upload/download progress for all users
+File Previews: Images and videos display inline with playback controls
+Enhanced User Experience:
+Real-time Progress: Visual progress bars during file transfers
+File Information: Shows filename, size, and transfer status
+Error Handling: Comprehensive error messages for unsupported files or issues
+Memory Management: Automatic cleanup of blob URLs to prevent memory leaks
+Technical Improvements:
+Scalable Architecture: Uses chunked transfer to handle unlimited users sharing files
+Robust Error Handling: Graceful handling of file transfer failures
+Visual Feedback: Clear system messages for all file operations
+Cross-browser Compatibility: Works with modern browsers supporting FileReader API
+🚀 How It Works:
+Upload: Users click 📎 button or drag files into chat
+Processing: Images are compressed if needed, files are validated
+Transfer: Files are converted to base64 and sent in chunks via ScaleDrone
+Display: Recipients see real-time progress and final media preview
+Interaction: Videos have playback controls, images are full-resolution
+The implementation maintains your existing chat functionality while adding seamless multimedia sharing capabilities. All file transfers happen through the same ScaleDrone signaling system, ensuring consistency with your current architecture.
+
+
+
+
+now make an updated html based off this
+
+Edit
+
+Enhanced Chat with Video/Image Support - HTML
+Interactive artifact 
+
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced Chat Room</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enhanced Chat Room</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
 
-        .chat-container {
-            width: 100%;
-            max-width: 800px;
-            height: 600px;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+    .chat-container {
+      width: 100%;
+      max-width: 800px;
+      height: 90vh;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
 
-        .chat-header {
-            background: linear-gradient(135deg, #4ECDC4, #44A08D);
-            color: white;
-            padding: 20px;
-            text-align: center;
-            position: relative;
-        }
+    .chat-header {
+      background: linear-gradient(135deg, #4ECDC4 0%, #45B7D1 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
 
-        .chat-title {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
+    .chat-header h1 {
+      font-size: 1.8em;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
 
-        .status {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
+    .status {
+      font-size: 0.9em;
+      opacity: 0.9;
+      font-weight: 400;
+    }
 
-        .messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: #f8f9fa;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
+    .messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      background: rgba(248, 249, 250, 0.8);
+      position: relative;
+      transition: background-color 0.3s ease;
+    }
 
-        .messages::-webkit-scrollbar {
-            width: 6px;
-        }
+    .messages::-webkit-scrollbar {
+      width: 6px;
+    }
 
-        .messages::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 3px;
-        }
+    .messages::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 3px;
+    }
 
-        .messages::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 3px;
-        }
+    .messages::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
 
-        .messages::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
+    .messages::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
 
-        .message {
-            display: flex;
-            flex-direction: column;
-            margin-bottom: 15px;
-            animation: fadeIn 0.3s ease-in;
-        }
+    .message {
+      margin: 15px 0;
+      display: flex;
+      flex-direction: column;
+      animation: messageSlide 0.3s ease-out;
+    }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+    @keyframes messageSlide {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
 
-        .message--mine {
-            align-items: flex-end;
-        }
+    .message--mine {
+      align-items: flex-end;
+    }
 
-        .message--theirs {
-            align-items: flex-start;
-        }
+    .message--theirs {
+      align-items: flex-start;
+    }
 
-        .message__name {
-            font-size: 0.85em;
-            color: #666;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
+    .message__name {
+      font-size: 0.8em;
+      margin-bottom: 6px;
+      font-weight: 600;
+      opacity: 0.8;
+      padding: 0 12px;
+    }
 
-        .message__bubble {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            word-wrap: break-word;
-            line-height: 1.4;
-        }
+    .message__bubble {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      word-wrap: break-word;
+      position: relative;
+      line-height: 1.4;
+      font-size: 0.95em;
+    }
 
-        .message--mine .message__bubble {
-            background: linear-gradient(135deg, #007bff, #0056b3);
-            color: white;
-            border-bottom-right-radius: 6px;
-        }
+    .message--mine .message__bubble {
+      background: linear-gradient(135deg, #4ECDC4 0%, #45B7D1 100%);
+      color: white;
+      border-bottom-right-radius: 6px;
+      box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
+    }
 
-        .message--theirs .message__bubble {
-            background: white;
-            color: #333;
-            border: 1px solid #e9ecef;
-            border-bottom-left-radius: 6px;
-        }
+    .message--theirs .message__bubble {
+      background: white;
+      color: #333;
+      border-bottom-left-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
 
-        .system-message {
-            text-align: center;
-            color: #666;
-            font-size: 0.9em;
-            margin: 10px 0;
-            padding: 8px;
-            background: rgba(0,0,0,0.05);
-            border-radius: 12px;
-            font-style: italic;
-        }
+    .system-message {
+      text-align: center;
+      color: #666;
+      font-size: 0.9em;
+      margin: 10px 0;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 12px;
+      font-style: italic;
+      animation: fadeIn 0.5s ease-out;
+    }
 
-        .user-count-message {
-            text-align: center;
-            color: #4ECDC4 !important;
-            font-size: 0.9em;
-            margin: 10px 0;
-            padding: 8px;
-            background: rgba(78, 205, 196, 0.1) !important;
-            border-radius: 12px;
-            font-weight: bold;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
 
-        .typing-indicator {
-            padding: 8px 16px;
-            margin: 5px 0;
-            background: rgba(0,0,0,0.05);
-            border-radius: 12px;
-            font-size: 0.9em;
-        }
+    .user-count-message {
+      background: rgba(78, 205, 196, 0.1) !important;
+      color: #4ECDC4 !important;
+      font-weight: 600 !important;
+      font-style: normal !important;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(5px);
+    }
 
-        .chat-input {
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #e9ecef;
-        }
+    .typing-indicator {
+      padding: 8px 16px;
+      margin: 5px 0;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 12px;
+      font-size: 0.9em;
+      animation: pulse 1.5s infinite;
+    }
 
-        .input-container {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
 
-        .message-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 25px;
-            font-size: 1em;
-            outline: none;
-            transition: border-color 0.3s ease;
-        }
+    .file-message {
+      max-width: 400px;
+      margin: 8px 0;
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+    }
 
-        .message-input:focus {
-            border-color: #4ECDC4;
-        }
+    .file-message:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
 
-        .send-button {
-            background: linear-gradient(135deg, #4ECDC4, #44A08D);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 45px;
-            height: 45px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+    .file-message img,
+    .file-message video {
+      width: 100%;
+      height: auto;
+      max-height: 300px;
+      object-fit: contain;
+      display: block;
+      background: #f8f9fa;
+    }
 
-        .send-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(78, 205, 196, 0.3);
-        }
+    .file-message video {
+      background: #000;
+    }
 
-        .send-button:active {
-            transform: scale(0.95);
-        }
+    .file-info {
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
 
-        .upload-button {
-            background: #FF6B6B;
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-            font-size: 16px;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
+    .file-info .file-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #333;
+      font-size: 0.9em;
+    }
 
-        .upload-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
-        }
+    .file-info .file-size {
+      opacity: 0.7;
+      font-size: 0.8em;
+      color: #666;
+    }
 
-        .upload-button:active {
-            transform: scale(0.95);
-        }
+    .progress-bar {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+      height: 6px;
+      margin: 8px 0 4px 0;
+      overflow: hidden;
+    }
 
-        .upload-button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+    .progress-bar div {
+      background: linear-gradient(90deg, #4ECDC4, #45B7D1);
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      position: relative;
+    }
 
-        .media-container {
-            margin-bottom: 8px;
-        }
+    .progress-bar div::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: shimmer 1.5s infinite;
+    }
 
-        .media-container img {
-            max-width: 300px;
-            max-height: 300px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-        }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
 
-        .media-container img:hover {
-            transform: scale(1.02);
-        }
+    .input-container {
+      padding: 20px;
+      background: white;
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+      backdrop-filter: blur(10px);
+    }
 
-        .media-container video {
-            max-width: 300px;
-            max-height: 200px;
-            border-radius: 8px;
-        }
+    .input-form {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
 
-        .media-container audio {
-            width: 280px;
-            max-width: 100%;
-        }
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
 
-        .media-info {
-            font-size: 0.8em;
-            opacity: 0.7;
-            margin-top: 8px;
-        }
+    .message-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-radius: 25px;
+      font-size: 1em;
+      outline: none;
+      transition: all 0.3s ease;
+      background: rgba(248, 249, 250, 0.8);
+      resize: none;
+      min-height: 50px;
+      max-height: 120px;
+      font-family: inherit;
+    }
 
-        .fullscreen-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0,0,0,0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            cursor: pointer;
-        }
+    .message-input:focus {
+      border-color: #4ECDC4;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
+    }
 
-        .fullscreen-overlay img {
-            max-width: 90vw;
-            max-height: 90vh;
-            object-fit: contain;
-        }
+    .message-input::placeholder {
+      color: #999;
+    }
 
-        /* Responsive design */
-        @media (max-width: 768px) {
-            .chat-container {
-                height: 100vh;
-                max-height: 100vh;
-                border-radius: 0;
-            }
+    .upload-btn {
+      background: linear-gradient(135deg, #4ECDC4 0%, #45B7D1 100%);
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
 
-            .messages {
-                padding: 15px;
-            }
+    .upload-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(78, 205, 196, 0.4);
+    }
 
-            .chat-input {
-                padding: 15px;
-            }
+    .upload-btn:active {
+      transform: translateY(0);
+    }
 
-            .message__bubble {
-                max-width: 85%;
-            }
+    .upload-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s;
+    }
 
-            .media-container img,
-            .media-container video {
-                max-width: 250px;
-            }
+    .upload-btn:hover::before {
+      left: 100%;
+    }
 
-            .media-container audio {
-                width: 220px;
-            }
-        }
+    .send-btn {
+      background: linear-gradient(135deg, #4ECDC4 0%, #45B7D1 100%);
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
+      color: white;
+    }
 
-        @media (max-width: 480px) {
-            body {
-                padding: 0;
-            }
+    .send-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(78, 205, 196, 0.4);
+    }
 
-            .chat-header {
-                padding: 15px;
-            }
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: 0 2px 6px rgba(78, 205, 196, 0.2);
+    }
 
-            .chat-title {
-                font-size: 1.3em;
-            }
+    .drop-zone {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(78, 205, 196, 0.1);
+      border: 3px dashed #4ECDC4;
+      border-radius: 20px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
+    }
 
-            .messages {
-                padding: 10px;
-            }
+    .drop-zone.active {
+      display: flex;
+    }
 
-            .chat-input {
-                padding: 10px;
-            }
+    .drop-zone-content {
+      text-align: center;
+      color: #4ECDC4;
+      font-size: 1.2em;
+      font-weight: 600;
+    }
 
-            .media-container img,
-            .media-container video {
-                max-width: 200px;
-            }
+    .drop-zone-icon {
+      font-size: 3em;
+      margin-bottom: 16px;
+      animation: bounce 1s infinite;
+    }
 
-            .media-container audio {
-                width: 180px;
-            }
-        }
-    </style>
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-10px); }
+      60% { transform: translateY(-5px); }
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+
+      .chat-container {
+        height: 95vh;
+        border-radius: 15px;
+      }
+
+      .chat-header {
+        padding: 15px;
+      }
+
+      .chat-header h1 {
+        font-size: 1.5em;
+      }
+
+      .messages {
+        padding: 15px;
+      }
+
+      .message__bubble {
+        max-width: 85%;
+        font-size: 0.9em;
+      }
+
+      .input-container {
+        padding: 15px;
+      }
+
+      .upload-btn,
+      .send-btn {
+        width: 45px;
+        height: 45px;
+        font-size: 16px;
+      }
+
+      .message-input {
+        font-size: 16px; /* Prevents zoom on iOS */
+      }
+    }
+
+    @media (max-width: 480px) {
+      .file-message {
+        max-width: 280px;
+      }
+      
+      .message__bubble {
+        max-width: 90%;
+        padding: 10px 14px;
+      }
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      .chat-container {
+        background: rgba(30, 30, 30, 0.95);
+      }
+
+      .messages {
+        background: rgba(20, 20, 20, 0.8);
+      }
+
+      .message--theirs .message__bubble {
+        background: rgba(60, 60, 60, 0.9);
+        color: #e0e0e0;
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .system-message {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ccc;
+      }
+
+      .input-container {
+        background: rgba(40, 40, 40, 0.9);
+        border-top-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .message-input {
+        background: rgba(60, 60, 60, 0.8);
+        color: #e0e0e0;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      .message-input:focus {
+        background: rgba(60, 60, 60, 0.9);
+      }
+
+      .file-message {
+        background: rgba(60, 60, 60, 0.9);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .file-info {
+        background: rgba(50, 50, 50, 0.95);
+      }
+
+      .file-info .file-name {
+        color: #e0e0e0;
+      }
+
+      .file-info .file-size {
+        color: #aaa;
+      }
+    }
+
+    /* Loading animation */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Accessibility improvements */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Focus styles for keyboard navigation */
+    .upload-btn:focus,
+    .send-btn:focus {
+      outline: 3px solid rgba(78, 205, 196, 0.5);
+      outline-offset: 2px;
+    }
+
+    .message-input:focus {
+      outline: none; /* Already handled by border-color and box-shadow */
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      .message--mine .message__bubble {
+        background: #000;
+        color: #fff;
+      }
+
+      .message--theirs .message__bubble {
+        background: #fff;
+        color: #000;
+        border: 2px solid #000;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <div class="chat-title">🎉 Enhanced Chat Room</div>
-            <div class="status">Connecting...</div>
-        </div>
-        
-        <div class="messages" id="messages">
-            <!-- Messages will be inserted here -->
-        </div>
-        
-        <div class="chat-input">
-            <form class="input-container">
-                <input type="text" class="message-input" placeholder="Type your message..." autocomplete="off">
-                <button type="button" class="upload-button" title="Upload image, video, or audio">📎</button>
-                <button type="submit" class="send-button" title="Send message">➤</button>
-            </form>
-        </div>
+  <div class="chat-container">
+    <div class="chat-header">
+      <h1>🎊 Enhanced Chat Room</h1>
+      <div class="status">Connecting...</div>
     </div>
-
-    <!-- Message template -->
-    <template data-template="message">
-        <div class="message">
-            <div class="message__name"></div>
-            <div class="message__bubble"></div>
-        </div>
-    </template>
-
-    <!-- Include Scaledrone for real-time messaging -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/scaledrone/1.0.6/scaledrone.min.js"></script>
     
-    <!-- Include the chat application script -->
-    <script src="script.js"></script>
-</body>
-</html>
+    <div class="messages" role="log" aria-live="polite" aria-label="Chat messages">
+      <!-- Messages will be inserted here -->
+    </div>
+    
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-zone-content">
+        <div class="drop-zone-icon">📎</div>
+        <div>Drop images or videos here to share</div>
+      </div>
+    </div>
+    
+    <div class="input-container">
+      <form class="input-form" role="form" aria-label="Send message">
+        <div class="input-wrapper">
+          <textarea 
+            class="message-input" 
+            type="text" 
+            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+            aria-label="Message input"
+            rows="1"
+            autocomplete="off"
+            spellcheck="true"
+          ></textarea>
+        </div>
+        <button type="button" class="upload-btn" title="Upload image or video" aria-label="Upload file">
+          📎
+        </button>
+        <button type="submit" class="send-btn" title="Send message" aria-label="Send message">
+          ➤
+        </button>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Message template -->
+  <template data-template="message">
+    <div class="message">
+      <div class="message__name"></div>
+      <div class="message__bubble"></div>
+    </div>
+  </template>
+  
+  <!-- Hidden file input -->
+  <input type="file" id="fileInput" class="visually-hidden" multiple accept="image/*,video/*" aria-label="Select files to upload">
+  
+  <!-- ScaleDrone -->
+  <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
+  
+  <script src="script.js"></script>
