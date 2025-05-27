@@ -12,11 +12,11 @@ function randomEmoji() {
 
 // Application variables
 const emoji = randomEmoji();
-let name = prompt("What's your name?") || "Anonymous";
+let name = prompt("What's your name?");
 
 // Validate name
 while (!name || name.trim() === '') {
-  name = prompt("Please enter a valid name:") || "Anonymous";
+  name = prompt("Please enter a valid name:");
 }
 name = name.trim();
 
@@ -54,16 +54,6 @@ const userColorPalette = [
 ];
 
 let colorIndex = 0;
-
-// File upload utilities
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const CHUNK_SIZE = 64 * 1024; // 64KB chunks for large files
-const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
-const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/ogg', 'video/avi', 'video/mov'];
-
-// Store for file transfers
-let fileTransfers = new Map();
-let receivedFiles = new Map();
 
 // Enhanced error handling
 function handleError(message, error) {
@@ -150,386 +140,6 @@ function scrollToBottom() {
   }
 }
 
-// File handling functions
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function generateFileId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-function isImageFile(file) {
-  return SUPPORTED_IMAGE_TYPES.includes(file.type);
-}
-
-function isVideoFile(file) {
-  return SUPPORTED_VIDEO_TYPES.includes(file.type);
-}
-
-function isSupportedFile(file) {
-  return isImageFile(file) || isVideoFile(file);
-}
-
-async function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function base64ToBlob(base64, mimeType) {
-  const byteCharacters = atob(base64.split(',')[1]);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: mimeType });
-}
-
-async function compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 0.8) {
-  if (!isImageFile(file)) return file;
-  
-  return new Promise((resolve) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    
-    img.onload = () => {
-      // Calculate new dimensions
-      let { width, height } = img;
-      
-      if (width > maxWidth) {
-        height = (height * maxWidth) / width;
-        width = maxWidth;
-      }
-      
-      if (height > maxHeight) {
-        width = (width * maxHeight) / height;
-        height = maxHeight;
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
-      
-      // Draw and compress
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(resolve, file.type, quality);
-    };
-    
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-async function sendFileInChunks(file, fileId) {
-  const base64Data = await fileToBase64(file);
-  const chunks = [];
-  const chunkCount = Math.ceil(base64Data.length / CHUNK_SIZE);
-  
-  // Split into chunks
-  for (let i = 0; i < chunkCount; i++) {
-    const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, base64Data.length);
-    chunks.push(base64Data.slice(start, end));
-  }
-  
-  // Send file metadata first
-  const fileMetadata = {
-    type: 'file_metadata',
-    fileId: fileId,
-    fileName: file.name,
-    fileType: file.type,
-    fileSize: file.size,
-    chunkCount: chunks.length,
-    timestamp: Date.now(),
-    sender: {
-      name: name,
-      emoji: emoji
-    }
-  };
-  
-  broadcastMessage(fileMetadata);
-  
-  // Send chunks with delay to avoid overwhelming the connection
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkData = {
-      type: 'file_chunk',
-      fileId: fileId,
-      chunkIndex: i,
-      chunkData: chunks[i],
-      isLastChunk: i === chunks.length - 1
-    };
-    
-    broadcastMessage(chunkData);
-    
-    // Small delay between chunks
-    if (i < chunks.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    
-    // Update progress
-    const progress = Math.round(((i + 1) / chunks.length) * 100);
-    updateFileProgress(fileId, progress, 'Sending');
-  }
-}
-
-function updateFileProgress(fileId, progress, status) {
-  const progressEl = document.querySelector(`[data-file-id="${fileId}"] .file-progress`);
-  if (progressEl) {
-    progressEl.innerHTML = `
-      <div class="progress-bar" style="width: 100%; background: #f0f0f0; border-radius: 4px; height: 6px; margin: 4px 0;">
-        <div style="width: ${progress}%; background: #4ECDC4; height: 100%; border-radius: 4px; transition: width 0.3s;"></div>
-      </div>
-      <small style="opacity: 0.7;">${status}: ${progress}%</small>
-    `;
-  }
-}
-
-function createFilePreview(file, fileId, isFromMe = false) {
-  const container = document.createElement('div');
-  container.className = 'file-message';
-  container.setAttribute('data-file-id', fileId);
-  container.style.cssText = `
-    max-width: 400px;
-    margin: 8px 0;
-    border-radius: 12px;
-    overflow: hidden;
-    background: rgba(0,0,0,0.05);
-    border: 1px solid rgba(0,0,0,0.1);
-  `;
-  
-  if (isImageFile(file)) {
-    const img = document.createElement('img');
-    img.style.cssText = `
-      width: 100%;
-      height: auto;
-      max-height: 300px;
-      object-fit: contain;
-      display: block;
-    `;
-    img.src = URL.createObjectURL(file);
-    container.appendChild(img);
-  } else if (isVideoFile(file)) {
-    const video = document.createElement('video');
-    video.controls = true;
-    video.style.cssText = `
-      width: 100%;
-      height: auto;
-      max-height: 300px;
-      display: block;
-    `;
-    video.src = URL.createObjectURL(file);
-    container.appendChild(video);
-  }
-  
-  // File info
-  const info = document.createElement('div');
-  info.style.cssText = `
-    padding: 8px 12px;
-    background: rgba(255,255,255,0.8);
-    font-size: 0.9em;
-  `;
-  info.innerHTML = `
-    <div style="font-weight: bold; margin-bottom: 4px;">${file.name}</div>
-    <div style="opacity: 0.7;">${formatFileSize(file.size)}</div>
-    <div class="file-progress"></div>
-  `;
-  
-  container.appendChild(info);
-  return container;
-}
-
-function handleFileReceived(metadata, chunks) {
-  try {
-    // Reconstruct the file data
-    const base64Data = chunks.join('');
-    const blob = base64ToBlob(base64Data, metadata.fileType);
-    const file = new File([blob], metadata.fileName, { type: metadata.fileType });
-    
-    // Create and insert file message
-    const filePreview = createFilePreview(file, metadata.fileId, false);
-    
-    // Remove progress indicator
-    const progressEl = filePreview.querySelector('.file-progress');
-    if (progressEl) {
-      progressEl.remove();
-    }
-    
-    // Insert as a message
-    insertFileMessage(filePreview, metadata.sender, false);
-    
-    insertSystemMessage(`📎 ${metadata.sender.emoji} ${metadata.sender.name} shared: ${metadata.fileName}`);
-    
-    // Cleanup
-    receivedFiles.delete(metadata.fileId);
-    
-  } catch (error) {
-    console.error('Error reconstructing file:', error);
-    handleError('Failed to receive file', error);
-  }
-}
-
-function insertFileMessage(fileElement, sender, isFromMe = false) {
-  const messagesEl = document.querySelector('.messages');
-  if (!messagesEl) return;
-
-  const messageContainer = document.createElement('div');
-  messageContainer.className = `message ${isFromMe ? 'message--mine' : 'message--theirs'}`;
-  messageContainer.style.cssText = `
-    margin: 10px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: ${isFromMe ? 'flex-end' : 'flex-start'};
-  `;
-  
-  if (!isFromMe) {
-    const nameEl = document.createElement('div');
-    nameEl.className = 'message__name';
-    nameEl.textContent = `${sender.emoji} ${sender.name}`;
-    nameEl.style.cssText = `
-      font-size: 0.8em;
-      margin-bottom: 4px;
-      opacity: 0.7;
-    `;
-    messageContainer.appendChild(nameEl);
-  }
-  
-  messageContainer.appendChild(fileElement);
-  messagesEl.appendChild(messageContainer);
-  scrollToBottom();
-}
-
-async function handleFileSelection(files) {
-  for (const file of files) {
-    if (!isSupportedFile(file)) {
-      insertSystemMessage(`❌ Unsupported file type: ${file.type}`);
-      continue;
-    }
-    
-    if (file.size > MAX_FILE_SIZE) {
-      insertSystemMessage(`❌ File too large: ${formatFileSize(file.size)} (max: ${formatFileSize(MAX_FILE_SIZE)})`);
-      continue;
-    }
-    
-    try {
-      let processedFile = file;
-      
-      // Compress images if needed
-      if (isImageFile(file) && file.size > 1024 * 1024) { // 1MB
-        insertSystemMessage(`🔄 Compressing image: ${file.name}`);
-        processedFile = await compressImage(file);
-      }
-      
-      const fileId = generateFileId();
-      
-      // Show local preview immediately
-      const filePreview = createFilePreview(processedFile, fileId, true);
-      insertFileMessage(filePreview, { name, emoji }, true);
-      
-      // Send file
-      await sendFileInChunks(processedFile, fileId);
-      
-      // Remove progress indicator after sending
-      setTimeout(() => {
-        const progressEl = filePreview.querySelector('.file-progress');
-        if (progressEl) {
-          progressEl.remove();
-        }
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error processing file:', error);
-      handleError(`Failed to send file: ${file.name}`, error);
-    }
-  }
-}
-
-function setupFileUpload() {
-  // Create file input
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.multiple = true;
-  fileInput.accept = [...SUPPORTED_IMAGE_TYPES, ...SUPPORTED_VIDEO_TYPES].join(',');
-  fileInput.style.display = 'none';
-  document.body.appendChild(fileInput);
-  
-  // Create upload button
-  const uploadBtn = document.createElement('button');
-  uploadBtn.innerHTML = '📎';
-  uploadBtn.title = 'Upload Image/Video';
-  uploadBtn.type = 'button';
-  uploadBtn.style.cssText = `
-    background: #4ECDC4;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    cursor: pointer;
-    margin-left: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  `;
-  
-  uploadBtn.addEventListener('mouseenter', () => {
-    uploadBtn.style.background = '#45B7D1';
-  });
-  
-  uploadBtn.addEventListener('mouseleave', () => {
-    uploadBtn.style.background = '#4ECDC4';
-  });
-  
-  uploadBtn.addEventListener('click', () => {
-    fileInput.click();
-  });
-  
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-      handleFileSelection(Array.from(e.target.files));
-      e.target.value = ''; // Reset input
-    }
-  });
-  
-  // Add to form
-  const form = document.querySelector('form');
-  if (form) {
-    form.appendChild(uploadBtn);
-  }
-  
-  // Drag and drop support
-  const messagesEl = document.querySelector('.messages');
-  if (messagesEl) {
-    messagesEl.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      messagesEl.style.background = 'rgba(78, 205, 196, 0.1)';
-    });
-    
-    messagesEl.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      messagesEl.style.background = '';
-    });
-    
-    messagesEl.addEventListener('drop', (e) => {
-      e.preventDefault();
-      messagesEl.style.background = '';
-      
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
-        handleFileSelection(files);
-      }
-    });
-  }
-}
-
 // Wait for Scaledrone signalling server to connect
 drone.on('open', error => {
   if (error) {
@@ -606,29 +216,6 @@ drone.on('open', error => {
       insertSystemMessage(`${data.emoji} ${data.name} joined the chat`);
     } else if (data.type === 'user_typing') {
       showTypingIndicator(data.name, data.emoji);
-    } else if (data.type === 'file_metadata') {
-      // Initialize file transfer
-      receivedFiles.set(data.fileId, {
-        metadata: data,
-        chunks: new Array(data.chunkCount),
-        receivedChunks: 0
-      });
-      insertSystemMessage(`📎 Receiving file: ${data.fileName} (${formatFileSize(data.fileSize)})`);
-    } else if (data.type === 'file_chunk') {
-      // Handle file chunk
-      const transfer = receivedFiles.get(data.fileId);
-      if (transfer) {
-        transfer.chunks[data.chunkIndex] = data.chunkData;
-        transfer.receivedChunks++;
-        
-        const progress = Math.round((transfer.receivedChunks / transfer.metadata.chunkCount) * 100);
-        console.log(`File ${data.fileId}: ${progress}% received`);
-        
-        if (transfer.receivedChunks === transfer.metadata.chunkCount) {
-          // File complete
-          handleFileReceived(transfer.metadata, transfer.chunks);
-        }
-      }
     }
   });
 
@@ -730,7 +317,7 @@ function insertMessageToDOM(messageData, isFromMe = false, senderId = null) {
   }
   
   if (bubbleEl) {
-    bubbleEl.textContent = messageData.content || '';
+    bubbleEl.innerHTML = messageData.content || '';
     
     // Add timestamp
     if (messageData.timestamp) {
@@ -862,19 +449,58 @@ function setupFormHandler() {
   input.focus();
 }
 
+function setupDragAndDrop() {
+  const dropTarget = document.querySelector('.messages');
+  if (!dropTarget) return;
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropTarget.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      dropTarget.classList.add('drag-hover');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropTarget.addEventListener(eventName, () => {
+      dropTarget.classList.remove('drag-hover');
+    });
+  });
+
+  dropTarget.addEventListener('drop', (e) => {
+    e.preventDefault();
+
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach(file => {
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        insertSystemMessage(`❌ Unsupported file type: ${file.type}`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result;
+        const html = file.type.startsWith('image/')
+          ? `<img src="${base64}" alt="Image" style="max-width: 100%; border-radius: 8px;" />`
+          : `<video controls style="max-width: 100%; border-radius: 8px;"><source src="${base64}" type="${file.type}"></video>`;
+
+        sendChatMessage(html);
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+}
+
 // Initialize when DOM is ready
 function init() {
-  console.log('Initializing unlimited users chat application with file support');
+  console.log('Initializing unlimited users chat application');
   console.log('User:', emoji, name);
   console.log('Chat room:', chatHash);
+  setupDragAndDrop();
   
   setupFormHandler();
-  setupFileUpload();
-  
   insertSystemMessage(`Welcome to the chat room! 🎊`);
   insertSystemMessage(`You are: ${emoji} ${name}`);
   insertSystemMessage(`Room: ${chatHash}`);
-  insertSystemMessage(`📎 Drag & drop images/videos or use the 📎 button to share files!`);
   
   // Show connection status
   showStatus('Connecting...');
@@ -910,18 +536,10 @@ function init() {
     if (drone) {
       drone.close();
     }
-    
-    // Cleanup file URLs to prevent memory leaks
-    document.querySelectorAll('img, video').forEach(media => {
-      if (media.src && media.src.startsWith('blob:')) {
-        URL.revokeObjectURL(media.src);
-      }
-    });
   });
 
   // Add some helpful commands
   insertSystemMessage('💡 Tip: Share this URL with others to invite them to chat!');
-  insertSystemMessage('🎨 Supported files: Images (JPEG, PNG, GIF, WebP, BMP) and Videos (MP4, WebM, OGG, AVI, MOV)');
 }
 
 // Start the application
