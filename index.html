@@ -1,233 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🐾 Emoji Chat</title>
+  <script type='text/javascript' src='https://cdn.scaledrone.com/scaledrone.min.js'></script>
   <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-  <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      background: #f2f2f2;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 16px;
       height: 100vh;
     }
-    header {
-      background: #4ECDC4;
-      color: white;
-      padding: 10px;
-      text-align: center;
-      font-size: 1.2em;
+    .content {
+      box-shadow: rgba(156, 172, 172, 0.2) 0px 2px 2px, rgba(156, 172, 172, 0.2) 0px 4px 4px, rgba(156, 172, 172, 0.2) 0px 8px 8px, rgba(156, 172, 172, 0.2) 0px 16px 16px, rgba(156, 172, 172, 0.2) 0px 32px 32px, rgba(156, 172, 172, 0.2) 0px 64px 64px;
+      border-radius: 3px;
+      height: 100vh;
+      max-height: 900px;
+      width: 100vw;
+      max-width: 1700px;
+      display: flex;
+      flex-direction: column;
     }
     .messages {
-      flex: 1;
-      padding: 10px;
-      overflow-y: auto;
+      flex-grow: 1;
+      padding: 20px 30px;
+      overflow: auto;
     }
     .message {
-      margin: 10px 0;
-      padding: 10px;
-      border-radius: 10px;
-      background: white;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      max-width: 80%;
+      display: flex;
+      flex-direction: column;
     }
     .message--mine {
-      margin-left: auto;
-      background: #dff9fb;
+      align-items: flex-end;
     }
-    .system-message {
-      text-align: center;
-      font-style: italic;
-      color: #888;
+    .message--theirs {
+      align-items: flex-start;
     }
-    .message small {
-      display: block;
-      font-size: 0.7em;
-      color: #999;
-      margin-top: 5px;
+    .message__name {
+      padding: 10px 0;
     }
-    footer {
+    .message__bubble {
+      padding: 20px;
+      border-radius: 3px;
+    }
+    .message--theirs .message__bubble {
+      background: rgba(0, 0, 5, 0.58);
+      color: white;
+    }
+    .message--mine .message__bubble {
+      background: rgba(40, 152, 255, 1);
+    }
+    .footer {
+      line-height: 76px;
+      border-top: 1px solid rgba(156, 172, 172, 0.2);
       display: flex;
-      padding: 10px;
-      background: #fff;
+      flex-shrink: 0;
     }
-    input[type="text"] {
-      flex: 1;
-      padding: 10px;
-      border-radius: 20px;
-      border: 1px solid #ccc;
+    input {
+      height: 76px;
+      border: none;
+      flex-grow: 1;
+      padding: 0 30px;
+      font-size: 16px;
+      background: transparent;
     }
-    .drag-hover {
-      background: #e0f7fa;
+    button {
+      border: none;
+      background: transparent;
+      padding: 0 30px;
+      font-size: 16px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <header>🐾 Emoji Chat</header>
-  <div class="messages"></div>
-  <footer>
-    <form style="flex: 1; display: flex;">
-      <input type="text" placeholder="Type your message..." />
-    </form>
-  </footer>
+  <div class="content">
+    <div class="messages">
 
-  <template id="message-template">
+    </div>
+    <form class="footer" onsubmit="return false;">
+      <input type="text" placeholder="Your message..">
+      <button type="submit">Send</button>
+    </form>
+  </div>
+
+  <template data-template="message">
     <div class="message">
-      <strong class="name"></strong>
-      <div class="bubble"></div>
+      <div class="message__name"></div>
+      <div class="message__bubble"></div>
     </div>
   </template>
 
-  <script>
-    const possibleEmojis = ['🐀','🐁','🐭','🐹','🐂','🐃','🐄','🐮','🐅','🐆','🐯','🐇','🐐','🐑','🐏','🐴',
-      '🐎','🐱','🐈','🐰','🐓','🐔','🐤','🐣','🐥','🐦','🐧','🐘','🐩','🐕','🐷','🐖',
-      '🐗','🐫','🐪','🐶','🐺','🐻','🐨','🐼','🐵','🙈','🙉','🙊','🐒','🐉','🐲','🐊',
-      '🐍','🐢','🐸','🐋','🐳','🐬','🐙','🐟','🐠','🐡','🐚','🐌','🐛','🐜','🐝','🐞'];
-    const emoji = possibleEmojis[Math.floor(Math.random() * possibleEmojis.length)];
-    let name = prompt("What's your name?").trim();
-    while (!name) name = prompt("Please enter a valid name:").trim();
+  <script src="script.js"></script>
 
-    const GLOBAL_CHAT_ROOM = 'global-chat-room';
-    let joinCode = prompt('Enter join code (leave blank for global chat):');
-    location.hash = joinCode || GLOBAL_CHAT_ROOM;
-    const roomName = 'observable-' + (location.hash.substring(1) || GLOBAL_CHAT_ROOM);
-    
-    const drone = new ScaleDrone('yiS12Ts5RdNhebyM');
-    const messagesEl = document.querySelector('.messages');
-    const form = document.querySelector('form');
-    const input = document.querySelector('input[type="text"]');
-    const template = document.querySelector('#message-template');
-    let room;
-    
-    const userColors = {};
-    const palette = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#F7DC6F', '#85C1E9'];
-    let colorIndex = 0;
-
-    function getUserColor(id) {
-      if (!userColors[id]) userColors[id] = palette[colorIndex++ % palette.length];
-      return userColors[id];
-    }
-
-    function addMessage({ name, content, isMine = false, clientId = null }) {
-      const clone = template.content.cloneNode(true);
-      const el = clone.querySelector('.message');
-      const nameEl = clone.querySelector('.name');
-      const bubble = clone.querySelector('.bubble');
-
-      nameEl.textContent = name;
-      if (clientId && !isMine) nameEl.style.color = getUserColor(clientId);
-      bubble.innerHTML = content;
-
-      if (isMine) el.classList.add('message--mine');
-
-      const time = document.createElement('small');
-      time.textContent = new Date().toLocaleTimeString();
-      bubble.appendChild(time);
-
-      messagesEl.appendChild(clone);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    function addSystemMessage(text) {
-      const msg = document.createElement('div');
-      msg.className = 'system-message';
-      msg.textContent = text;
-      messagesEl.appendChild(msg);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    drone.on('open', error => {
-      if (error) return console.error(error);
-      room = drone.subscribe(roomName);
-
-      room.on('open', err => {
-        if (err) return console.error(err);
-        addSystemMessage("🟢 Connected to chat room");
-        drone.publish({ room: roomName, message: { type: 'user_joined', name, emoji } });
-      });
-
-      room.on('members', members => {
-        addSystemMessage(`👥 ${members.length} users online`);
-      });
-
-      room.on('member_join', () => addSystemMessage("👋 Someone joined"));
-      room.on('member_leave', () => addSystemMessage("👋 Someone left"));
-
-      room.on('data', (data, client) => {
-        if (!client || client.id === drone.clientId) return;
-
-        if (data.type === 'user_joined') {
-          addSystemMessage(`${data.emoji} ${data.name} joined the chat`);
-        } else if (data.compressed) {
-          try {
-            const decoded = atob(data.content);
-            const byteArray = Uint8Array.from(decoded, c => c.charCodeAt(0));
-            const decompressed = pako.inflate(byteArray, { to: 'string' });
-            addMessage({ name: data.name, content: decompressed, clientId: client.id });
-          } catch {
-            addSystemMessage("❌ Error decompressing message");
-          }
-        } else if (data.content) {
-          addMessage({ name: data.name, content: data.content, clientId: client.id });
-        }
-      });
-    });
-
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const text = input.value.trim();
-      if (!text) return;
-      const msg = { name: `${emoji} ${name}`, content: text };
-      addMessage({ ...msg, isMine: true });
-      drone.publish({ room: roomName, message: msg });
-      input.value = '';
-    });
-
-    // Drag & drop
-    const dropTarget = messagesEl;
-    ['dragenter', 'dragover'].forEach(evt =>
-      dropTarget.addEventListener(evt, e => {
-        e.preventDefault();
-        dropTarget.classList.add('drag-hover');
-      })
-    );
-    ['dragleave', 'drop'].forEach(evt =>
-      dropTarget.addEventListener(evt, () => dropTarget.classList.remove('drag-hover'))
-    );
-
-    dropTarget.addEventListener('drop', e => {
-      e.preventDefault();
-      const files = Array.from(e.dataTransfer.files);
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result;
-          let html = '';
-          if (file.type.startsWith('image/')) {
-            html = `<img src="${base64}" style="max-width:100%; border-radius:8px;">`;
-          } else if (file.type.startsWith('video/')) {
-            html = `<video controls style="max-width:100%; border-radius:8px;"><source src="${base64}" type="${file.type}"></video>`;
-          } else {
-            addSystemMessage(`❌ Unsupported file: ${file.name}`);
-            return;
-          }
-
-          const compressed = pako.deflate(html);
-          const encoded = btoa(String.fromCharCode(...compressed));
-          const msg = { name: `${emoji} ${name}`, content: encoded, compressed: true };
-          addMessage({ name: msg.name, content: html, isMine: true });
-          drone.publish({ room: roomName, message: msg });
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-
-    addSystemMessage("💬 Share this link to invite others");
-    addSystemMessage(`You are: ${emoji} ${name}`);
-  </script>
 </body>
 </html>
