@@ -46,6 +46,11 @@ let messageHistory = [];
 let connectedUsers = new Map();
 let userColors = {};
 
+// Image handling variables
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+let imagePreviewContainer = null;
+
 // Color palette for different users
 const userColorPalette = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
@@ -140,444 +145,427 @@ function scrollToBottom() {
   }
 }
 
-// Wait for Scaledrone signalling server to connect
-drone.on('open', error => {
-  if (error) {
-    handleError('Failed to connect to chat server', error);
-    return;
+// Image handling functions
+function validateImage(file) {
+  if (!file) return { valid: false, error: 'No file selected' };
+  
+  if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+    return { valid: false, error: 'Unsupported image type. Please use JPEG, PNG, GIF, or WebP.' };
   }
   
-  showStatus('Connected to chat server');
-  room = drone.subscribe(roomName);
+  if (file.size > MAX_IMAGE_SIZE) {
+    return { valid: false, error: 'Image too large. Maximum size is 5MB.' };
+  }
   
-  room.on('open', error => {
-    if (error) {
-      handleError('Failed to join chat room', error);
-      return;
-    }
-    console.log('Connected to room:', roomName);
-    isConnected = true;
-    showStatus('Connected - Ready to chat!');
-    insertSystemMessage('Connected to chat room! 🎉');
-  });
-
-  room.on('members', members => {
-    console.log('Room members:', members.length);
-    connectedUsers.clear();
-    
-    members.forEach(member => {
-      connectedUsers.set(member.id, {
-        id: member.id,
-        clientData: member.clientData || {}
-      });
-    });
-    
-    insertUserCountMessage(members.length);
-    showStatus(`Connected (${members.length} users online)`);
-    
-    if (members.length === 1) {
-      insertSystemMessage('You are the first person in this chat room!');
-    }
-  });
-
-  room.on('member_join', member => {
-    console.log('Member joined:', member.id);
-    connectedUsers.set(member.id, {
-      id: member.id,
-      clientData: member.clientData || {}
-    });
-    
-    insertUserCountMessage(connectedUsers.size);
-    insertSystemMessage(`Someone joined the chat 👋`);
-    showStatus(`Connected (${connectedUsers.size} users online)`);
-  });
-
-  room.on('member_leave', member => {
-    console.log('Member left:', member.id);
-    connectedUsers.delete(member.id);
-    
-    insertUserCountMessage(connectedUsers.size);
-    insertSystemMessage(`Someone left the chat 👋`);
-    showStatus(`Connected (${connectedUsers.size} users online)`);
-  });
-
-  // Listen for messages from other users
-  room.on('data', (data, client) => {
-    // Don't show our own messages (we already display them)
-    if (client.id === drone.clientId) {
-      return;
-    }
-
-    console.log('Received message from:', client.id, data);
-    
-    if (data.type === 'chat_message') {
-      insertMessageToDOM(data.message, false, client.id);
-    } else if (data.type === 'user_joined') {
-      insertSystemMessage(`${data.emoji} ${data.name} joined the chat`);
-    } else if (data.type === 'user_typing') {
-      showTypingIndicator(data.name, data.emoji);
-    }
-  });
-
-  // Announce our arrival
-  broadcastMessage({
-    type: 'user_joined',
-    name: name,
-    emoji: emoji,
-    timestamp: Date.now()
-  });
-});
-
-drone.on('error', error => {
-  handleError('Chat server error', error);
-  isConnected = false;
-});
-
-drone.on('close', () => {
-  console.log('Connection to chat server closed');
-  isConnected = false;
-  showStatus('Disconnected');
-  insertSystemMessage('Connection lost. Refresh to reconnect.');
-});
-
-// Broadcast message to all users in the room
-function broadcastMessage(messageData) {
-  if (!isConnected || !room) {
-    console.error('Cannot send message - not connected to chat room');
-    return false;
-  }
-
-  try {
-    drone.publish({
-      room: roomName,
-      message: messageData
-    });
-    return true;
-  } catch (error) {
-    console.error('Failed to broadcast message:', error);
-    handleError('Failed to send message', error);
-    return false;
-  }
+  return { valid: true };
 }
 
-function sendChatMessage(content) {
-  if (!content || content.trim() === '') {
-    return;
-  }
-
-  const messageData = {
-    name: name,
-    content: content.trim(),
-    emoji: emoji,
-    timestamp: Date.now(),
-    id: Math.random().toString(36).substr(2, 9)
-  };
-
-  console.log('Sending message:', messageData);
-
-  // Show our own message immediately
-  insertMessageToDOM(messageData, true, drone.clientId);
-
-  // Broadcast to others
-  const success = broadcastMessage({
-    type: 'chat_message',
-    message: messageData
-  });
-
-  if (!success) {
-    insertSystemMessage('Failed to send message - connection issue');
-  }
-
-  // Store in message history
-  messageHistory.push(messageData);
-  
-  // Limit history size
-  if (messageHistory.length > 100) {
-    messageHistory = messageHistory.slice(-100);
-  }
-}
-
-function insertMessageToDOM(messageData, isFromMe = false, senderId = null) {
-  const template = document.querySelector('template[data-template="message"]');
-  if (!template) {
-    console.error('Message template not found in HTML');
-    return;
-  }
-
-  const nameEl = template.content.querySelector('.message__name');
-  const bubbleEl = template.content.querySelector('.message__bubble');
-  
-  if (nameEl) {
-    nameEl.textContent = `${messageData.emoji || ''} ${messageData.name || 'Anonymous'}`.trim();
+function compressImage(file, maxWidth = 1200, maxHeight = 800, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
     
-    // Add color for different users
-    if (senderId && !isFromMe) {
-      nameEl.style.color = getUserColor(senderId);
-    }
-  }
-  
-  if (bubbleEl) {
-    bubbleEl.textContent = messageData.content || '';
-    
-    // Add timestamp
-    if (messageData.timestamp) {
-      const timeEl = document.createElement('small');
-      timeEl.textContent = new Date(messageData.timestamp).toLocaleTimeString();
-      timeEl.style.cssText = `
-        display: block;
-        opacity: 0.6;
-        font-size: 0.75em;
-        margin-top: 4px;
-      `;
-      bubbleEl.appendChild(timeEl);
-    }
-  }
-
-  const clone = document.importNode(template.content, true);
-  const messageEl = clone.querySelector('.message');
-  
-  if (messageEl) {
-    messageEl.classList.add(isFromMe ? 'message--mine' : 'message--theirs');
-    
-    // Add sender color border for others' messages
-    if (!isFromMe && senderId) {
-      messageEl.style.borderLeft = `3px solid ${getUserColor(senderId)}`;
-    }
-  }
-
-  const messagesEl = document.querySelector('.messages');
-  if (messagesEl) {
-    messagesEl.appendChild(clone);
-    scrollToBottom();
-  }
-}
-
-// Typing indicator (optional feature)
-let typingTimeout;
-function showTypingIndicator(userName, userEmoji) {
-  const messagesEl = document.querySelector('.messages');
-  if (!messagesEl) return;
-
-  // Remove existing typing indicator
-  const existingIndicator = messagesEl.querySelector('.typing-indicator');
-  if (existingIndicator) {
-    existingIndicator.remove();
-  }
-
-  const typingEl = document.createElement('div');
-  typingEl.className = 'typing-indicator';
-  typingEl.innerHTML = `
-    <span style="opacity: 0.7; font-style: italic;">
-      ${userEmoji} ${userName} is typing...
-    </span>
-  `;
-  typingEl.style.cssText = `
-    padding: 8px 16px;
-    margin: 5px 0;
-    background: rgba(0,0,0,0.05);
-    border-radius: 12px;
-    font-size: 0.9em;
-  `;
-  
-  messagesEl.appendChild(typingEl);
-  scrollToBottom();
-
-  // Remove after 3 seconds
-  setTimeout(() => {
-    if (typingEl.parentNode) {
-      typingEl.remove();
-    }
-  }, 3000);
-}
-
-// Enhanced form handling
-function setupFormHandler() {
-  const form = document.querySelector('form');
-  const input = document.querySelector('input[type="text"]');
-  
-  if (!form || !input) {
-    console.error('Form or input not found in HTML');
-    return;
-  }
-
-  console.log('Setting up form handler for unlimited users chat');
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    
-    const value = input.value.trim();
-    console.log('Form submitted with value:', value);
-    
-    if (!value) {
-      console.log('Empty message, not sending');
-      return;
-    }
-
-    input.value = '';
-    sendChatMessage(value);
-  });
-
-  // Enhanced keyboard handling with typing indicator
-  let isTyping = false;
-  input.addEventListener('input', () => {
-    if (!isTyping && input.value.trim()) {
-      isTyping = true;
-      broadcastMessage({
-        type: 'user_typing',
-        name: name,
-        emoji: emoji
-      });
-    }
-    
-    // Reset typing indicator
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-      isTyping = false;
-    }, 2000);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      clearTimeout(typingTimeout);
-      isTyping = false;
-      form.dispatchEvent(new Event('submit'));
-    }
-  });
-
-  // Focus input for better UX
-  input.focus();
-}
-
-// Reference to the message container where files are dropped
-const messagesEl = document.querySelector('.messages');
-
-// Show visual indicator when dragging over the drop area
-['dragenter', 'dragover'].forEach(eventName => {
-  messagesEl.addEventListener(eventName, e => {
-    e.preventDefault();
-    messagesEl.classList.add('drag-hover');
-  });
-});
-
-// Remove indicator on leave or drop
-['dragleave', 'drop'].forEach(eventName => {
-  messagesEl.addEventListener(eventName, () => {
-    messagesEl.classList.remove('drag-hover');
-  });
-});
-
-// Handle file drop
-messagesEl.addEventListener('drop', e => {
-  e.preventDefault();
-  const files = Array.from(e.dataTransfer.files);
-
-  files.forEach(file => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const base64 = reader.result;
-      let htmlContent = '';
-
-      // Render image or video based on file type
-      if (file.type.startsWith('image/')) {
-        htmlContent = `<img src="${base64}" style="max-width:100%; border-radius:8px;">`;
-      } else if (file.type.startsWith('video/')) {
-        htmlContent = `<video controls style="max-width:100%; border-radius:8px;">
-                         <source src="${base64}" type="${file.type}">
-                       </video>`;
-      } else {
-        insertSystemMessage(`❌ Unsupported file: ${file.name}`);
-        return;
+    img.onload = () => {
+      // Calculate new dimensions
+      let { width, height } = img;
+      const originalWidth = width;
+      const originalHeight = height;
+      
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width *= ratio;
+        height *= ratio;
       }
-
-      // Compress HTML and encode to Base64
-      const compressed = pako.deflate(htmlContent);
-      const encoded = btoa(String.fromCharCode(...compressed));
-
-      const msg = {
-        name: `${emoji} ${name}`, // assumes emoji and name are defined
-        content: encoded,
-        compressed: true
-      };
-
-      // Display on sender's screen
-      insertMessageToDOM({ name: msg.name, content: htmlContent }, true);
-
-      // Broadcast to chat room (assuming drone and roomName are defined)
-      drone.publish({
-        room: roomName,
-        message: msg
-      });
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve({
+            blob: blob,
+            originalWidth: originalWidth,
+            originalHeight: originalHeight,
+            compressedWidth: width,
+            compressedHeight: height,
+            originalSize: file.size,
+            compressedSize: blob.size
+          });
+        } else {
+          reject(new Error('Failed to compress image'));
+        }
+      }, 'image/jpeg', quality); // Always convert to JPEG for better compression
     };
+    
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-});
-
-// Optional helper to insert system messages
-function insertSystemMessage(text) {
-  const msg = document.createElement('div');
-  msg.className = 'system-message';
-  msg.textContent = text;
-  messagesEl.appendChild(msg);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// Initialize when DOM is ready
-function init() {
-  console.log('Initializing unlimited users chat application');
-  console.log('User:', emoji, name);
-  console.log('Chat room:', chatHash);
+function base64ToBlob(base64Data) {
+  const arr = base64Data.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
   
-  setupFormHandler();
-  insertSystemMessage(`Welcome to the chat room! 🎊`);
-  insertSystemMessage(`You are: ${emoji} ${name}`);
-  insertSystemMessage(`Room: ${chatHash}`);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
   
-  // Show connection status
-  showStatus('Connecting...');
-  
-  // Global error handlers
-  window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
-    handleError('Unexpected error occurred', event.error);
-  });
-
-  window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
-    handleError('Promise rejection', event.reason);
-  });
-
-  // Handle page visibility changes
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !isConnected) {
-      insertSystemMessage('Attempting to reconnect...');
-      // Note: Scaledrone should auto-reconnect, but we can show status
-    }
-  });
-
-  // Cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    if (isConnected) {
-      broadcastMessage({
-        type: 'user_left',
-        name: name,
-        emoji: emoji
-      });
-    }
-    if (drone) {
-      drone.close();
-    }
-  });
-
-  // Add some helpful commands
-  insertSystemMessage('💡 Tip: Share this URL with others to invite them to chat!');
+  return new Blob([u8arr], { type: mime });
 }
 
-// Start the application
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
+async function processImageForSending(file) {
+  try {
+    showStatus('Compressing image...');
+    
+    // Compress the image
+    const compressionResult = await compressImage(file);
+    const compressedBase64 = await fileToBase64(compressionResult.blob);
+    
+    console.log(`Image compressed: ${(compressionResult.originalSize / 1024).toFixed(1)}KB → ${(compressionResult.compressedSize / 1024).toFixed(1)}KB`);
+    
+    return {
+      base64Data: compressedBase64,
+      originalName: file.name,
+      originalType: file.type,
+      originalSize: compressionResult.originalSize,
+      compressedSize: compressionResult.compressedSize,
+      originalWidth: compressionResult.originalWidth,
+      originalHeight: compressionResult.originalHeight,
+      compressedWidth: compressionResult.compressedWidth,
+      compressedHeight: compressionResult.compressedHeight
+    };
+  } catch (error) {
+    console.error('Error processing image:', error);
+    throw error;
+  }
+}
+
+function createImageElement(imageData, isFromMe = false) {
+  const imgContainer = document.createElement('div');
+  imgContainer.className = 'image-container';
+  imgContainer.style.cssText = `
+    max-width: 400px;
+    margin: 8px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  `;
+  
+  const img = document.createElement('img');
+  img.src = imageData.base64Data;
+  img.alt = imageData.originalName || 'Shared image';
+  img.style.cssText = `
+    width: 100%;
+    height: auto;
+    display: block;
+    max-height: 300px;
+    object-fit: contain;
+    background: #f0f0f0;
+  `;
+  
+  // Add image info overlay
+  const infoOverlay = document.createElement('div');
+  infoOverlay.className = 'image-info';
+  infoOverlay.style.cssText = `
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    color: white;
+    padding: 8px;
+    font-size: 0.8em;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  `;
+  
+  const compressionInfo = imageData.compressedSize ? 
+    ` (${(imageData.originalSize / 1024).toFixed(1)}KB → ${(imageData.compressedSize / 1024).toFixed(1)}KB)` : '';
+  
+  infoOverlay.textContent = `${imageData.originalName || 'Image'}${compressionInfo}`;
+  
+  imgContainer.appendChild(img);
+  imgContainer.appendChild(infoOverlay);
+  
+  // Hover effects
+  imgContainer.addEventListener('mouseenter', () => {
+    imgContainer.style.transform = 'scale(1.02)';
+    infoOverlay.style.opacity = '1';
+  });
+  
+  imgContainer.addEventListener('mouseleave', () => {
+    imgContainer.style.transform = 'scale(1)';
+    infoOverlay.style.opacity = '0';
+  });
+  
+  // Click to view full size
+  imgContainer.addEventListener('click', () => {
+    showImageModal(imageData);
+  });
+  
+  return imgContainer;
+}
+
+function showImageModal(imageData) {
+  // Remove existing modal
+  const existingModal = document.querySelector('.image-modal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  const modal = document.createElement('div');
+  modal.className = 'image-modal';
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    cursor: pointer;
+  `;
+  
+  const img = document.createElement('img');
+  img.src = imageData.base64Data;
+  img.alt = imageData.originalName || 'Image';
+  img.style.cssText = `
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    cursor: default;
+  `;
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    background: rgba(255, 255, 255, 0.8);
+    border: none;
+    font-size: 2em;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  
+  modal.appendChild(img);
+  modal.appendChild(closeBtn);
+  document.body.appendChild(modal);
+  
+  // Close modal events
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  closeBtn.addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  // ESC key to close
+  const handleEscape = (e) => {
+    if (e.key === 'Escape') {
+      modal.remove();
+      document.removeEventListener('keydown', handleEscape);
+    }
+  };
+  
+  document.addEventListener('keydown', handleEscape);
+  
+  // Prevent image drag
+  img.addEventListener('dragstart', (e) => e.preventDefault());
+}
+
+function setupImageUpload() {
+  const form = document.querySelector('form');
+  if (!form) return;
+  
+  // Create image upload button
+  const imageBtn = document.createElement('button');
+  imageBtn.type = 'button';
+  imageBtn.innerHTML = '📷';
+  imageBtn.title = 'Send image';
+  imageBtn.style.cssText = `
+    background: #4ECDC4;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: background 0.2s ease;
+  `;
+  
+  imageBtn.addEventListener('mouseenter', () => {
+    imageBtn.style.background = '#45B7D1';
+  });
+  
+  imageBtn.addEventListener('mouseleave', () => {
+    imageBtn.style.background = '#4ECDC4';
+  });
+  
+  // Create hidden file input
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = SUPPORTED_IMAGE_TYPES.join(',');
+  fileInput.style.display = 'none';
+  
+  imageBtn.addEventListener('click', () => {
+    fileInput.click();
+  });
+  
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const validation = validateImage(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+    
+    try {
+      const imageData = await processImageForSending(file);
+      sendImageMessage(imageData);
+      fileInput.value = ''; // Reset input
+    } catch (error) {
+      console.error('Error processing image:', error);
+      alert('Failed to process image. Please try again.');
+    }
+  });
+  
+  // Add to form
+  form.appendChild(imageBtn);
+  form.appendChild(fileInput);
+  
+  // Setup drag and drop
+  setupDragAndDrop();
+}
+
+function setupDragAndDrop() {
+  const messagesEl = document.querySelector('.messages');
+  const input = document.querySelector('input[type="text"]');
+  
+  if (!messagesEl) return;
+  
+  let dragCounter = 0;
+  
+  const showDropZone = () => {
+    let dropZone = document.querySelector('.drop-zone');
+    if (!dropZone) {
+      dropZone = document.createElement('div');
+      dropZone.className = 'drop-zone';
+      dropZone.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(78, 205, 196, 0.1);
+        border: 3px dashed #4ECDC4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+        font-size: 1.5em;
+        color: #4ECDC4;
+        font-weight: bold;
+      `;
+      dropZone.textContent = '📷 Drop image here to send';
+      document.body.appendChild(dropZone);
+    }
+  };
+  
+  const hideDropZone = () => {
+    const dropZone = document.querySelector('.drop-zone');
+    if (dropZone) {
+      dropZone.remove();
+    }
+  };
+  
+  // Prevent default drag behaviors
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    document.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+  
+  document.addEventListener('dragenter', (e) => {
+    dragCounter++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      showDropZone();
+    }
+  });
+  
+  document.addEventListener('dragleave', (e) => {
+    dragCounter--;
+    if (dragCounter === 0) {
+      hideDropZone();
+    }
+  });
+  
+  document.addEventListener('drop', async (e) => {
+    dragCounter = 0;
+    hideDropZone();
+    
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => SUPPORTED_IMAGE_TYPES.includes(file.type));
+    
+    if (imageFiles.length === 0) {
+      if (files.length > 0) {
+        alert('Please drop image files only (JPEG, PNG, GIF, WebP)');
+      }
+      return;
+    }
+    
+    // Process multiple images
+    for (const file of imageFiles.slice(0, 5)) { // Limit to 5 images at once
+      const validation = validateImage(file);
+      if (!validation.valid) {
+        alert(`${file.name}: ${validation.error}`);
+        continue;
+      }
+      
+      try {
+        const imageData = await processImageForSending(file);
+        sendImageMessage(imageData);
+        // Add small delay between multiple images
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`Error processing ${file.name}:`, error);
+        alert(`Failed to process ${file.name}`);
+      }
+    }
+  });
 }
