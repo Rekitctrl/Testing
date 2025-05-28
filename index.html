@@ -1,146 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>📨 Simple Chat</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🐾 Emoji Chat</title>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+  <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f4f4f4;
       margin: 0;
-      padding: 0;
+      background: #f2f2f2;
       display: flex;
       flex-direction: column;
       height: 100vh;
     }
-
-    .chat-window {
-      flex: 1;
-      overflow-y: auto;
+    header {
+      background: #4ECDC4;
+      color: white;
       padding: 10px;
+      text-align: center;
+      font-size: 1.2em;
     }
-
+    .messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+    }
     .message {
-      background: white;
-      margin: 10px;
+      margin: 10px 0;
       padding: 10px;
       border-radius: 10px;
-      max-width: 70%;
-      word-wrap: break-word;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      max-width: 80%;
     }
-
-    .mine {
-      background: #d1ffd1;
-      align-self: flex-end;
+    .message--mine {
+      margin-left: auto;
+      background: #dff9fb;
     }
-
-    .theirs {
-      background: #e0e0e0;
-      align-self: flex-start;
+    .system-message {
+      text-align: center;
+      font-style: italic;
+      color: #888;
     }
-
-    .input-area {
+    .message small {
+      display: block;
+      font-size: 0.7em;
+      color: #999;
+      margin-top: 5px;
+    }
+    footer {
       display: flex;
       padding: 10px;
-      background: #ddd;
+      background: #fff;
     }
-
     input[type="text"] {
       flex: 1;
       padding: 10px;
-      font-size: 16px;
+      border-radius: 20px;
+      border: 1px solid #ccc;
     }
-
-    input[type="file"] {
-      margin-left: 10px;
-    }
-
-    button {
-      padding: 10px;
-      margin-left: 10px;
-    }
-
-    img, video {
-      max-width: 100%;
-      border-radius: 8px;
-    }
-
-    .chat-wrapper {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
+    .drag-hover {
+      background: #e0f7fa;
     }
   </style>
 </head>
 <body>
-  <div class="chat-wrapper">
-    <div class="chat-window" id="chat"></div>
-    <div class="input-area">
-      <input type="text" id="messageInput" placeholder="Type a message..." />
-      <input type="file" id="fileInput" />
-      <button onclick="sendMessage()">Send</button>
+  <header>🐾 Emoji Chat</header>
+  <div class="messages"></div>
+  <footer>
+    <form style="flex: 1; display: flex;">
+      <input type="text" placeholder="Type your message..." />
+    </form>
+  </footer>
+
+  <template id="message-template">
+    <div class="message">
+      <strong class="name"></strong>
+      <div class="bubble"></div>
     </div>
-  </div>
+  </template>
 
-  <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
   <script>
-    const drone = new ScaleDrone('yiS12Ts5RdNhebyM'); // Replace with your Scaledrone Channel ID
-    const roomName = 'any-file-chat';
-    let room = null;
-    let clientId = null;
+    const possibleEmojis = ['🐀','🐁','🐭','🐹','🐂','🐃','🐄','🐮','🐅','🐆','🐯','🐇','🐐','🐑','🐏','🐴',
+      '🐎','🐱','🐈','🐰','🐓','🐔','🐤','🐣','🐥','🐦','🐧','🐘','🐩','🐕','🐷','🐖',
+      '🐗','🐫','🐪','🐶','🐺','🐻','🐨','🐼','🐵','🙈','🙉','🙊','🐒','🐉','🐲','🐊',
+      '🐍','🐢','🐸','🐋','🐳','🐬','🐙','🐟','🐠','🐡','🐚','🐌','🐛','🐜','🐝','🐞'];
+    const emoji = possibleEmojis[Math.floor(Math.random() * possibleEmojis.length)];
+    let name = prompt("What's your name?").trim();
+    while (!name) name = prompt("Please enter a valid name:").trim();
 
-    const chat = document.getElementById('chat');
-    const input = document.getElementById('messageInput');
-    const fileInput = document.getElementById('fileInput');
+    const GLOBAL_CHAT_ROOM = 'global-chat-room';
+    let joinCode = prompt('Enter join code (leave blank for global chat):');
+    location.hash = joinCode || GLOBAL_CHAT_ROOM;
+    const roomName = 'observable-' + (location.hash.substring(1) || GLOBAL_CHAT_ROOM);
+    
+    const drone = new ScaleDrone('yiS12Ts5RdNhebyM');
+    const messagesEl = document.querySelector('.messages');
+    const form = document.querySelector('form');
+    const input = document.querySelector('input[type="text"]');
+    const template = document.querySelector('#message-template');
+    let room;
+    
+    const userColors = {};
+    const palette = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#F7DC6F', '#85C1E9'];
+    let colorIndex = 0;
 
-    function appendMessage(content, isMine = false) {
-      const div = document.createElement('div');
-      div.className = 'message ' + (isMine ? 'mine' : 'theirs');
-      div.innerHTML = content;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+    function getUserColor(id) {
+      if (!userColors[id]) userColors[id] = palette[colorIndex++ % palette.length];
+      return userColors[id];
     }
 
-    function sendMessage() {
-      const text = input.value.trim();
-      if (text) {
-        drone.publish({ room: roomName, message: { type: 'text', content: text } });
-        appendMessage(text, true);
-        input.value = '';
-      }
+    function addMessage({ name, content, isMine = false, clientId = null }) {
+      const clone = template.content.cloneNode(true);
+      const el = clone.querySelector('.message');
+      const nameEl = clone.querySelector('.name');
+      const bubble = clone.querySelector('.bubble');
 
-      const file = fileInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result;
-          const isImage = file.type.startsWith('image/');
-          const isVideo = file.type.startsWith('video/');
+      nameEl.textContent = name;
+      if (clientId && !isMine) nameEl.style.color = getUserColor(clientId);
+      bubble.innerHTML = content;
 
-          const html = isImage
-            ? `<img src="${base64}" alt="Image" />`
-            : isVideo
-              ? `<video controls><source src="${base64}" type="${file.type}" /></video>`
-              : `<p>Unsupported file type</p>`;
+      if (isMine) el.classList.add('message--mine');
 
-          drone.publish({ room: roomName, message: { type: 'file', content: html } });
-          appendMessage(html, true);
-        };
-        reader.readAsDataURL(file);
-        fileInput.value = '';
-      }
+      const time = document.createElement('small');
+      time.textContent = new Date().toLocaleTimeString();
+      bubble.appendChild(time);
+
+      messagesEl.appendChild(clone);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addSystemMessage(text) {
+      const msg = document.createElement('div');
+      msg.className = 'system-message';
+      msg.textContent = text;
+      messagesEl.appendChild(msg);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     drone.on('open', error => {
       if (error) return console.error(error);
-      clientId = drone.clientId;
       room = drone.subscribe(roomName);
 
+      room.on('open', err => {
+        if (err) return console.error(err);
+        addSystemMessage("🟢 Connected to chat room");
+        drone.publish({ room: roomName, message: { type: 'user_joined', name, emoji } });
+      });
+
+      room.on('members', members => {
+        addSystemMessage(`👥 ${members.length} users online`);
+      });
+
+      room.on('member_join', () => addSystemMessage("👋 Someone joined"));
+      room.on('member_leave', () => addSystemMessage("👋 Someone left"));
+
       room.on('data', (data, client) => {
-        if (client.id === clientId) return;
-        appendMessage(data.content, false);
+        if (!client || client.id === drone.clientId) return;
+
+        if (data.type === 'user_joined') {
+          addSystemMessage(`${data.emoji} ${data.name} joined the chat`);
+        } else if (data.compressed) {
+          try {
+            const decoded = atob(data.content);
+            const byteArray = Uint8Array.from(decoded, c => c.charCodeAt(0));
+            const decompressed = pako.inflate(byteArray, { to: 'string' });
+            addMessage({ name: data.name, content: decompressed, clientId: client.id });
+          } catch {
+            addSystemMessage("❌ Error decompressing message");
+          }
+        } else if (data.content) {
+          addMessage({ name: data.name, content: data.content, clientId: client.id });
+        }
       });
     });
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      const msg = { name: `${emoji} ${name}`, content: text };
+      addMessage({ ...msg, isMine: true });
+      drone.publish({ room: roomName, message: msg });
+      input.value = '';
+    });
+
+    // Drag & drop
+    const dropTarget = messagesEl;
+    ['dragenter', 'dragover'].forEach(evt =>
+      dropTarget.addEventListener(evt, e => {
+        e.preventDefault();
+        dropTarget.classList.add('drag-hover');
+      })
+    );
+    ['dragleave', 'drop'].forEach(evt =>
+      dropTarget.addEventListener(evt, () => dropTarget.classList.remove('drag-hover'))
+    );
+
+    dropTarget.addEventListener('drop', e => {
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result;
+          let html = '';
+          if (file.type.startsWith('image/')) {
+            html = `<img src="${base64}" style="max-width:100%; border-radius:8px;">`;
+          } else if (file.type.startsWith('video/')) {
+            html = `<video controls style="max-width:100%; border-radius:8px;"><source src="${base64}" type="${file.type}"></video>`;
+          } else {
+            addSystemMessage(`❌ Unsupported file: ${file.name}`);
+            return;
+          }
+
+          const compressed = pako.deflate(html);
+          const encoded = btoa(String.fromCharCode(...compressed));
+          const msg = { name: `${emoji} ${name}`, content: encoded, compressed: true };
+          addMessage({ name: msg.name, content: html, isMine: true });
+          drone.publish({ room: roomName, message: msg });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    addSystemMessage("💬 Share this link to invite others");
+    addSystemMessage(`You are: ${emoji} ${name}`);
   </script>
 </body>
 </html>
