@@ -317,7 +317,7 @@ function insertMessageToDOM(messageData, isFromMe = false, senderId = null) {
   }
   
   if (bubbleEl) {
-    bubbleEl.innerHTML = messageData.content || '';
+    bubbleEl.textContent = messageData.content || '';
     
     // Add timestamp
     if (messageData.timestamp) {
@@ -449,45 +449,79 @@ function setupFormHandler() {
   input.focus();
 }
 
-function setupDragAndDrop() {
-  const dropTarget = document.querySelector('.messages');
-  if (!dropTarget) return;
+// Reference to the message container where files are dropped
+const messagesEl = document.querySelector('.messages');
 
-  ['dragenter', 'dragover'].forEach(eventName => {
-    dropTarget.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      dropTarget.classList.add('drag-hover');
-    });
-  });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    dropTarget.addEventListener(eventName, () => {
-      dropTarget.classList.remove('drag-hover');
-    });
-  });
-
-  dropTarget.addEventListener('drop', (e) => {
+// Show visual indicator when dragging over the drop area
+['dragenter', 'dragover'].forEach(eventName => {
+  messagesEl.addEventListener(eventName, e => {
     e.preventDefault();
+    messagesEl.classList.add('drag-hover');
+  });
+});
 
-    const files = Array.from(e.dataTransfer.files);
-    files.forEach(file => {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        insertSystemMessage(`❌ Unsupported file type: ${file.type}`);
+// Remove indicator on leave or drop
+['dragleave', 'drop'].forEach(eventName => {
+  messagesEl.addEventListener(eventName, () => {
+    messagesEl.classList.remove('drag-hover');
+  });
+});
+
+// Handle file drop
+messagesEl.addEventListener('drop', e => {
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer.files);
+
+  files.forEach(file => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const base64 = reader.result;
+      let htmlContent = '';
+
+      // Render image or video based on file type
+      if (file.type.startsWith('image/')) {
+        htmlContent = `<img src="${base64}" style="max-width:100%; border-radius:8px;">`;
+      } else if (file.type.startsWith('video/')) {
+        htmlContent = `<video controls style="max-width:100%; border-radius:8px;">
+                         <source src="${base64}" type="${file.type}">
+                       </video>`;
+      } else {
+        insertSystemMessage(`❌ Unsupported file: ${file.name}`);
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result;
-        const html = file.type.startsWith('image/')
-          ? `<img src="${base64}" alt="Image" style="max-width: 100%; border-radius: 8px;" />`
-          : `<video controls style="max-width: 100%; border-radius: 8px;"><source src="${base64}" type="${file.type}"></video>`;
+      // Compress HTML and encode to Base64
+      const compressed = pako.deflate(htmlContent);
+      const encoded = btoa(String.fromCharCode(...compressed));
 
-        sendChatMessage(html);
+      const msg = {
+        name: `${emoji} ${name}`, // assumes emoji and name are defined
+        content: encoded,
+        compressed: true
       };
-      reader.readAsDataURL(file);
-    });
+
+      // Display on sender's screen
+      insertMessageToDOM({ name: msg.name, content: htmlContent }, true);
+
+      // Broadcast to chat room (assuming drone and roomName are defined)
+      drone.publish({
+        room: roomName,
+        message: msg
+      });
+    };
+
+    reader.readAsDataURL(file);
   });
+});
+
+// Optional helper to insert system messages
+function insertSystemMessage(text) {
+  const msg = document.createElement('div');
+  msg.className = 'system-message';
+  msg.textContent = text;
+  messagesEl.appendChild(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 // Initialize when DOM is ready
@@ -495,7 +529,6 @@ function init() {
   console.log('Initializing unlimited users chat application');
   console.log('User:', emoji, name);
   console.log('Chat room:', chatHash);
-  setupDragAndDrop();
   
   setupFormHandler();
   insertSystemMessage(`Welcome to the chat room! 🎊`);
