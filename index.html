@@ -1,100 +1,195 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <script type='text/javascript' src='https://cdn.scaledrone.com/scaledrone.min.js'></script>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width">
-  <style>
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 16px;
-      height: 100vh;
-    }
-    .content {
-      box-shadow: rgba(156, 172, 172, 0.2) 0px 2px 2px, rgba(156, 172, 172, 0.2) 0px 4px 4px, rgba(156, 172, 172, 0.2) 0px 8px 8px, rgba(156, 172, 172, 0.2) 0px 16px 16px, rgba(156, 172, 172, 0.2) 0px 32px 32px, rgba(156, 172, 172, 0.2) 0px 64px 64px;
-      border-radius: 3px;
-      height: 100vh;
-      max-height: 900px;
-      width: 100vw;
-      max-width: 1700px;
-      display: flex;
-      flex-direction: column;
-    }
-    .messages {
-      flex-grow: 1;
-      padding: 20px 30px;
-      overflow: auto;
-    }
-    .message {
-      display: flex;
-      flex-direction: column;
-    }
-    .message--mine {
-      align-items: flex-end;
-    }
-    .message--theirs {
-      align-items: flex-start;
-    }
-    .message__name {
-      padding: 10px 0;
-    }
-    .message__bubble {
-      padding: 20px;
-      border-radius: 3px;
-    }
-    .message--theirs .message__bubble {
-      background: rgba(0, 0, 5, 0.58);
-      color: white;
-    }
-    .message--mine .message__bubble {
-      background: rgba(40, 152, 255, 1);
-    }
-    .footer {
-      line-height: 76px;
-      border-top: 1px solid rgba(156, 172, 172, 0.2);
-      display: flex;
-      flex-shrink: 0;
-    }
-    input {
-      height: 76px;
-      border: none;
-      flex-grow: 1;
-      padding: 0 30px;
-      font-size: 16px;
-      background: transparent;
-    }
-    button {
-      border: none;
-      background: transparent;
-      padding: 0 30px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <div class="content">
-    <div class="messages">
-
-    </div>
-    <form class="footer" onsubmit="return false;">
-      <input type="text" placeholder="Your message..">
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BubbleChat</title>
+    <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.css"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        height: 100vh;
+        flex-direction: column;
+        background: #f2f2f2;
+      }
+      #messages {
+        flex: 1;
+        padding: 1rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .message {
+        max-width: 60%;
+        padding: 0.6rem 1rem;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        position: relative;
+        word-wrap: break-word;
+      }
+      .me {
+        align-self: flex-end;
+        background: #dcf8c6;
+      }
+      .system {
+        text-align: center;
+        color: gray;
+        font-size: 0.9em;
+      }
+      form {
+        display: flex;
+        padding: 1rem;
+        gap: 0.5rem;
+      }
+      input {
+        flex: 1;
+        padding: 0.8rem;
+        border: 1px solid #ccc;
+        border-radius: 20px;
+        font-size: 1rem;
+      }
+      button {
+        padding: 0 1rem;
+        border: none;
+        background: #007aff;
+        color: white;
+        border-radius: 20px;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="messages"></div>
+    <form id="form">
+      <input type="text" id="input" placeholder="Say something..." autocomplete="off" />
       <button type="submit">Send</button>
     </form>
-  </div>
+    <script>
+      const ROOM_ID = 'observable-room';
+      const drone = new Scaledrone('yiPBy2nBdnSxkNuU', {
+        data: { name: `anon-${Math.floor(Math.random() * 1000)}` }
+      });
 
-  <template data-template="message">
-    <div class="message">
-      <div class="message__name"></div>
-      <div class="message__bubble"></div>
-    </div>
-  </template>
+      let room;
 
-  <script src="script.js"></script>
+      drone.on('open', error => {
+        if (error) return console.error(error);
+        room = drone.subscribe(ROOM_ID);
 
-</body>
+        room.on('data', (data, member) => {
+          insertMessageToDOM(data, member);
+        });
+      });
+
+      const form = document.getElementById('form');
+      const input = document.getElementById('input');
+      const messages = document.getElementById('messages');
+
+      function insertMessageToDOM(messageData, member) {
+        const bubbleEl = document.createElement('div');
+        bubbleEl.classList.add('message');
+        if (!member) {
+          bubbleEl.classList.add('system');
+          bubbleEl.innerText = messageData;
+        } else {
+          if (member.clientId === drone.clientId) {
+            bubbleEl.classList.add('me');
+          }
+          bubbleEl.innerHTML = messageData.content || '';
+        }
+        messages.appendChild(bubbleEl);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (input.value.trim() !== '') {
+          sendChatMessage(input.value);
+          input.value = '';
+        }
+      });
+
+      function sendChatMessage(content) {
+        drone.publish({
+          room: ROOM_ID,
+          message: { content }
+        });
+      }
+
+      document.addEventListener('paste', handlePaste);
+      document.addEventListener('drop', handleDrop);
+      document.addEventListener('dragover', e => e.preventDefault());
+
+      function handlePaste(e) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            processFile(file);
+          }
+        }
+      }
+
+      function handleDrop(e) {
+        e.preventDefault();
+        const files = e.dataTransfer.files;
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          processFile(file);
+        }
+      }
+
+      function processFile(file) {
+        if (file.type.startsWith('image/')) {
+          compressImage(file, base64 => {
+            const html = `<img src="${base64}" style="max-width:100%; border-radius:8px;" />`;
+            sendChatMessage(html);
+          });
+        } else if (file.type.startsWith('video/')) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = reader.result;
+            const html = `<video controls style="max-width:100%; border-radius:8px;"><source src="${base64}" type="${file.type}"></video>`;
+            sendChatMessage(html);
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function compressImage(file, callback) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxSize = 400;
+            const scale = Math.min(maxSize / img.width, maxSize / img.height);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+            callback(compressedBase64);
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    </script>
+  </body>
 </html>
